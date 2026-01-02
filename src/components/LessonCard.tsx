@@ -2,10 +2,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Lesson } from '@/data/lessons';
+import type { ManagedLesson } from '@/hooks/useContentManager';
 
 interface LessonCardProps {
-  lesson: Lesson;
+  lesson: ManagedLesson;
   isCompleted: boolean;
   onClick: () => void;
   index: number;

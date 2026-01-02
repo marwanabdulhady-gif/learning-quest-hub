@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, X } from 'lucide-react';
-import { units, categories } from '@/data/lessons';
+import { categories } from '@/data/lessons';
 import { cn } from '@/lib/utils';
 
 interface FilterBarProps {
@@ -12,6 +12,7 @@ interface FilterBarProps {
   onUnitChange: (unit: string | null) => void;
   selectedCategory: string | null;
   onCategoryChange: (category: string | null) => void;
+  units?: string[];
 }
 
 const categoryEmojis = {
@@ -28,6 +29,7 @@ export function FilterBar({
   onUnitChange,
   selectedCategory,
   onCategoryChange,
+  units = [],
 }: FilterBarProps) {
   const [showFilters, setShowFilters] = useState(true);
 

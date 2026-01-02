@@ -8,12 +8,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Trophy, Sparkles } from 'lucide-react';
-import type { Lesson } from '@/data/lessons';
+import type { ManagedLesson } from '@/hooks/useContentManager';
 import type { Badge } from '@/data/badges';
 import { cn } from '@/lib/utils';
 
 interface LessonDialogProps {
-  lesson: Lesson | null;
+  lesson: ManagedLesson | null;
   isOpen: boolean;
   onClose: () => void;
   isCompleted: boolean;
@@ -31,9 +31,11 @@ export function LessonDialog({
 }: LessonDialogProps) {
   if (!lesson) return null;
 
+  const hasHtmlContent = lesson.htmlContent && lesson.htmlContent.trim().length > 0;
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className={cn("sm:max-w-lg", hasHtmlContent && "sm:max-w-3xl max-h-[90vh] overflow-y-auto")}>
         <DialogHeader>
           <div className="flex items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-4xl">
@@ -57,6 +59,16 @@ export function LessonDialog({
               +{lesson.points} points
             </span>
           </div>
+
+          {/* HTML Content Section */}
+          {hasHtmlContent && (
+            <div className="mt-6 rounded-xl border bg-background p-4">
+              <div
+                className="prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: lesson.htmlContent || '' }}
+              />
+            </div>
+          )}
 
           {/* Show recently earned badges */}
           {recentlyEarnedBadges.length > 0 && (

@@ -1,24 +1,24 @@
 import { useState, useMemo } from 'react';
-import { lessons } from '@/data/lessons';
 import { Header } from '@/components/Header';
 import { LessonCard } from '@/components/LessonCard';
 import { FilterBar } from '@/components/FilterBar';
 import { ProgressBar } from '@/components/ProgressBar';
 import { LessonDialog } from '@/components/LessonDialog';
 import { useGamification } from '@/hooks/useGamification';
-import type { Lesson } from '@/data/lessons';
+import { useContentManager, type ManagedLesson } from '@/hooks/useContentManager';
 import type { Badge } from '@/data/badges';
 
 const Index = () => {
   const gamification = useGamification();
+  const content = useContentManager();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<ManagedLesson | null>(null);
   const [recentlyEarnedBadges, setRecentlyEarnedBadges] = useState<Badge[]>([]);
 
   const filteredLessons = useMemo(() => {
-    return lessons.filter((lesson) => {
+    return content.lessons.filter((lesson) => {
       const matchesSearch =
         !searchQuery ||
         lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -27,7 +27,7 @@ const Index = () => {
       const matchesCategory = !selectedCategory || lesson.category === selectedCategory;
       return matchesSearch && matchesUnit && matchesCategory;
     });
-  }, [searchQuery, selectedUnit, selectedCategory]);
+  }, [searchQuery, selectedUnit, selectedCategory, content.lessons]);
 
   const progress = gamification.getProgress();
 
@@ -41,6 +41,14 @@ const Index = () => {
     setSelectedLesson(null);
     setRecentlyEarnedBadges([]);
   };
+
+  if (!content.isLoaded) {
+    return (
+      <div className="min-h-screen gradient-hero flex items-center justify-center">
+        <div className="text-xl">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen gradient-hero">
@@ -83,6 +91,7 @@ const Index = () => {
             onUnitChange={setSelectedUnit}
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
+            units={content.getUnitNames()}
           />
         </section>
 
@@ -90,7 +99,7 @@ const Index = () => {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-foreground">
-              {filteredLessons.length === lessons.length
+              {filteredLessons.length === content.lessons.length
                 ? 'All Lessons'
                 : `${filteredLessons.length} Lesson${filteredLessons.length !== 1 ? 's' : ''} Found`}
             </h2>
