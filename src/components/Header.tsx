@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Trophy, Home } from 'lucide-react';
+import { Trophy, Home, Settings } from 'lucide-react';
 import { PointsDisplay } from './PointsDisplay';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +13,7 @@ export function Header({ totalPoints }: HeaderProps) {
   const navLinks = [
     { to: '/', label: 'Learn', icon: Home },
     { to: '/dashboard', label: 'My Progress', icon: Trophy },
+    { to: '/admin', label: 'Manage', icon: Settings },
   ];
 
   return (
