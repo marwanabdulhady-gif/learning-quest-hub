@@ -2,10 +2,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ManagedLesson } from '@/hooks/useContentManager';
+import type { ContentType } from '@/hooks/useContentManager';
 
 interface LessonCardProps {
-  lesson: ManagedLesson;
+  lesson: ContentType & { unit: string; category: string };
   isCompleted: boolean;
   onClick: () => void;
   index: number;
@@ -25,6 +25,8 @@ const difficultyIcons = {
 };
 
 export function LessonCard({ lesson, isCompleted, onClick, index }: LessonCardProps) {
+  const category = lesson.category as keyof typeof categoryColors;
+  
   return (
     <Card
       onClick={onClick}
@@ -62,7 +64,7 @@ export function LessonCard({ lesson, isCompleted, onClick, index }: LessonCardPr
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <Badge
             variant="outline"
-            className={cn('text-xs font-semibold capitalize', categoryColors[lesson.category])}
+            className={cn('text-xs font-semibold capitalize', categoryColors[category] || categoryColors.lesson)}
           >
             {lesson.category}
           </Badge>

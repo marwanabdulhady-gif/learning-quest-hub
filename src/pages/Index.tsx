@@ -1,12 +1,14 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { LessonCard } from '@/components/LessonCard';
 import { FilterBar } from '@/components/FilterBar';
 import { ProgressBar } from '@/components/ProgressBar';
 import { LessonDialog } from '@/components/LessonDialog';
 import { useGamification } from '@/hooks/useGamification';
-import { useContentManager, type ManagedLesson } from '@/hooks/useContentManager';
+import { useContentManager, type ContentType } from '@/hooks/useContentManager';
 import type { Badge } from '@/data/badges';
+
+type DisplayLesson = ContentType & { unit: string; category: string };
 
 const Index = () => {
   const gamification = useGamification();
@@ -14,11 +16,24 @@ const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedLesson, setSelectedLesson] = useState<ManagedLesson | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<DisplayLesson | null>(null);
   const [recentlyEarnedBadges, setRecentlyEarnedBadges] = useState<Badge[]>([]);
 
+  // Get all content combined for display
+  const allLessons = useMemo(() => content.getAllContent(), [content]);
+  
+  // Set total lessons count for progress calculation
+  useEffect(() => {
+    gamification.setTotalLessonsCount(allLessons.length);
+  }, [allLessons.length]);
+  
+  // Get unique unit names
+  const unitNames = useMemo(() => {
+    return [...new Set(content.units.map((u) => u.name))];
+  }, [content.units]);
+
   const filteredLessons = useMemo(() => {
-    return content.lessons.filter((lesson) => {
+    return allLessons.filter((lesson) => {
       const matchesSearch =
         !searchQuery ||
         lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -27,13 +42,13 @@ const Index = () => {
       const matchesCategory = !selectedCategory || lesson.category === selectedCategory;
       return matchesSearch && matchesUnit && matchesCategory;
     });
-  }, [searchQuery, selectedUnit, selectedCategory, content.lessons]);
+  }, [searchQuery, selectedUnit, selectedCategory, allLessons]);
 
   const progress = gamification.getProgress();
 
   const handleCompleteLesson = () => {
     if (!selectedLesson) return;
-    const result = gamification.completeLesson(selectedLesson.id);
+    const result = gamification.completeLesson(selectedLesson.id, selectedLesson.points);
     setRecentlyEarnedBadges(result.newBadges);
   };
 
@@ -91,7 +106,7 @@ const Index = () => {
             onUnitChange={setSelectedUnit}
             selectedCategory={selectedCategory}
             onCategoryChange={setSelectedCategory}
-            units={content.getUnitNames()}
+            units={unitNames}
           />
         </section>
 
@@ -99,7 +114,7 @@ const Index = () => {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-xl font-bold text-foreground">
-              {filteredLessons.length === content.lessons.length
+              {filteredLessons.length === allLessons.length
                 ? 'All Lessons'
                 : `${filteredLessons.length} Lesson${filteredLessons.length !== 1 ? 's' : ''} Found`}
             </h2>

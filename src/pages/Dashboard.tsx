@@ -1,11 +1,12 @@
+import { useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { BadgeCard } from '@/components/BadgeCard';
 import { ProgressBar } from '@/components/ProgressBar';
-import { PointsDisplay } from '@/components/PointsDisplay';
 import { useGamification } from '@/hooks/useGamification';
+import { useContentManager } from '@/hooks/useContentManager';
 import { badges } from '@/data/badges';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Trophy, BookOpen, Star, RotateCcw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -22,9 +23,23 @@ import {
 
 const Dashboard = () => {
   const gamification = useGamification();
+  const content = useContentManager();
+  
+  // Get all content items
+  const allContent = content.getAllContent();
+  
+  // Set total lessons count for progress calculation
+  useEffect(() => {
+    gamification.setTotalLessonsCount(allContent.length);
+  }, [allContent.length]);
+  
   const progress = gamification.getProgress();
-  const completedLessons = gamification.getCompletedLessonsData();
   const earnedBadges = gamification.getEarnedBadgesData();
+  
+  // Get completed lessons data from content
+  const completedLessonsData = allContent.filter((item) => 
+    gamification.completedLessons.includes(item.id)
+  );
 
   return (
     <div className="min-h-screen gradient-hero">
@@ -128,9 +143,9 @@ const Dashboard = () => {
         <section className="mb-10">
           <h2 className="mb-6 text-2xl font-bold text-foreground">Recently Completed</h2>
 
-          {completedLessons.length > 0 ? (
+          {completedLessonsData.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {completedLessons.slice(-6).reverse().map((lesson) => (
+              {completedLessonsData.slice(-6).reverse().map((lesson) => (
                 <Card key={lesson.id} className="shadow-card border-success/30 bg-success-light/30">
                   <CardContent className="flex items-center gap-4 p-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/20 text-2xl">

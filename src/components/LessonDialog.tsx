@@ -8,12 +8,12 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, Trophy, Sparkles } from 'lucide-react';
-import type { ManagedLesson } from '@/hooks/useContentManager';
+import type { ContentType } from '@/hooks/useContentManager';
 import type { Badge } from '@/data/badges';
 import { cn } from '@/lib/utils';
 
 interface LessonDialogProps {
-  lesson: ManagedLesson | null;
+  lesson: (ContentType & { unit: string; category: string }) | null;
   isOpen: boolean;
   onClose: () => void;
   isCompleted: boolean;

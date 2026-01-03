@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { lessons, Lesson } from '@/data/lessons';
 import { badges, Badge } from '@/data/badges';
 import confetti from 'canvas-confetti';
 
@@ -16,13 +15,13 @@ export interface GamificationState {
 }
 
 export interface GamificationActions {
-  completeLesson: (lessonId: string) => { pointsEarned: number; newBadges: Badge[] };
+  completeLesson: (lessonId: string, points?: number) => { pointsEarned: number; newBadges: Badge[] };
   isLessonCompleted: (lessonId: string) => boolean;
   isBadgeEarned: (badgeId: string) => boolean;
-  getCompletedLessonsData: () => Lesson[];
   getEarnedBadgesData: () => Badge[];
   getProgress: () => { completed: number; total: number; percentage: number };
   resetProgress: () => void;
+  setTotalLessonsCount: (count: number) => void;
 }
 
 function loadFromStorage(): GamificationState {
@@ -81,25 +80,6 @@ function checkForNewBadges(
         earned = completedLessons.length >= badge.criteria.count;
         break;
 
-      case 'unit_completed': {
-        const unitCriteria = badge.criteria;
-        const unitLessons = lessons.filter((l) => l.unit === unitCriteria.unit);
-        earned = unitLessons.every((l) => completedLessons.includes(l.id));
-        break;
-      }
-
-      case 'category_completed': {
-        const categoryCriteria = badge.criteria;
-        const categoryLessons = lessons.filter(
-          (l) => l.category === categoryCriteria.category
-        );
-        const completedInCategory = categoryLessons.filter((l) =>
-          completedLessons.includes(l.id)
-        );
-        earned = completedInCategory.length >= categoryCriteria.count;
-        break;
-      }
-
       case 'points_earned':
         earned = totalPoints >= badge.criteria.points;
         break;
@@ -108,6 +88,12 @@ function checkForNewBadges(
         earned = badge.criteria.lessonIds.every((id) =>
           completedLessons.includes(id)
         );
+        break;
+        
+      // These require content context which we don't have here
+      // They'll be handled when content manager provides the lesson data
+      case 'unit_completed':
+      case 'category_completed':
         break;
     }
 
@@ -121,6 +107,7 @@ function checkForNewBadges(
 
 export function useGamification(): GamificationState & GamificationActions {
   const [state, setState] = useState<GamificationState>(loadFromStorage);
+  const [totalLessonsCount, setTotalLessonsCount] = useState(0);
 
   // Save to localStorage whenever state changes
   useEffect(() => {
@@ -138,17 +125,12 @@ export function useGamification(): GamificationState & GamificationActions {
   );
 
   const completeLesson = useCallback(
-    (lessonId: string) => {
+    (lessonId: string, points: number = 10) => {
       if (state.completedLessons.includes(lessonId)) {
         return { pointsEarned: 0, newBadges: [] };
       }
 
-      const lesson = lessons.find((l) => l.id === lessonId);
-      if (!lesson) {
-        return { pointsEarned: 0, newBadges: [] };
-      }
-
-      const pointsEarned = lesson.points;
+      const pointsEarned = points;
       const newCompletedLessons = [...state.completedLessons, lessonId];
       const newTotalPoints = state.totalPoints + pointsEarned;
 
@@ -181,11 +163,6 @@ export function useGamification(): GamificationState & GamificationActions {
     [state]
   );
 
-  const getCompletedLessonsData = useCallback(
-    () => lessons.filter((l) => state.completedLessons.includes(l.id)),
-    [state.completedLessons]
-  );
-
   const getEarnedBadgesData = useCallback(
     () => badges.filter((b) => state.earnedBadges.includes(b.id)),
     [state.earnedBadges]
@@ -193,10 +170,10 @@ export function useGamification(): GamificationState & GamificationActions {
 
   const getProgress = useCallback(() => {
     const completed = state.completedLessons.length;
-    const total = lessons.length;
+    const total = totalLessonsCount;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     return { completed, total, percentage };
-  }, [state.completedLessons]);
+  }, [state.completedLessons, totalLessonsCount]);
 
   const resetProgress = useCallback(() => {
     setState({ completedLessons: [], earnedBadges: [], totalPoints: 0 });
@@ -207,9 +184,9 @@ export function useGamification(): GamificationState & GamificationActions {
     completeLesson,
     isLessonCompleted,
     isBadgeEarned,
-    getCompletedLessonsData,
     getEarnedBadgesData,
     getProgress,
     resetProgress,
+    setTotalLessonsCount,
   };
 }
