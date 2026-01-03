@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Pencil, Trash2, GripVertical, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Plus, RotateCcw, Calendar, BookOpen, Gamepad2, FolderKanban, Dumbbell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -32,62 +31,79 @@ import {
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useContentManager, type ManagedLesson, type Unit } from '@/hooks/useContentManager';
+import { useContentManager, type Year, type Unit, type ContentItem, type ManagedLesson, type Practice, type Project, type Game } from '@/hooks/useContentManager';
+import { DraggableList } from '@/components/admin/DraggableList';
+import { ContentItemForm } from '@/components/admin/ContentItemForm';
+import { ImportExportPanel } from '@/components/admin/ImportExportPanel';
 import { toast } from 'sonner';
-
-const categories = ['lesson', 'practice', 'project', 'game'] as const;
-const difficulties = ['easy', 'medium', 'hard'] as const;
 
 const Admin = () => {
   const content = useContentManager();
-  const [activeTab, setActiveTab] = useState('units');
+  const [activeTab, setActiveTab] = useState('years');
+
+  // Year dialogs
+  const [yearDialogOpen, setYearDialogOpen] = useState(false);
+  const [editingYear, setEditingYear] = useState<Year | null>(null);
+  const [yearName, setYearName] = useState('');
 
   // Unit dialogs
   const [unitDialogOpen, setUnitDialogOpen] = useState(false);
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [unitName, setUnitName] = useState('');
+  const [unitYearId, setUnitYearId] = useState('');
 
-  // Lesson dialogs
-  const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<ManagedLesson | null>(null);
-  const [lessonForm, setLessonForm] = useState<{
-    title: string;
-    description: string;
-    unit: string;
-    category: 'lesson' | 'practice' | 'project' | 'game';
-    difficulty: 'easy' | 'medium' | 'hard';
-    points: number;
-    icon: string;
-    htmlContent: string;
-  }>({
-    title: '',
-    description: '',
-    unit: '',
-    category: 'lesson',
-    difficulty: 'easy',
-    points: 10,
-    icon: '📚',
-    htmlContent: '',
-  });
+  // Content dialogs
+  const [contentDialogOpen, setContentDialogOpen] = useState(false);
+  const [contentType, setContentType] = useState<'lesson' | 'practice' | 'project' | 'game'>('lesson');
+  const [editingContent, setEditingContent] = useState<ContentItem | null>(null);
+  const [contentDefaultUnitId, setContentDefaultUnitId] = useState<string | undefined>();
 
   // Delete confirmations
+  const [deleteYearId, setDeleteYearId] = useState<string | null>(null);
   const [deleteUnitId, setDeleteUnitId] = useState<string | null>(null);
-  const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
+  const [deleteContentId, setDeleteContentId] = useState<{ id: string; type: string } | null>(null);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
-  // HTML Preview
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  // Year handlers
+  const openAddYear = () => {
+    setEditingYear(null);
+    setYearName('');
+    setYearDialogOpen(true);
+  };
+
+  const openEditYear = (year: Year) => {
+    setEditingYear(year);
+    setYearName(year.name);
+    setYearDialogOpen(true);
+  };
+
+  const saveYear = () => {
+    if (!yearName.trim()) {
+      toast.error('Year name is required');
+      return;
+    }
+    if (editingYear) {
+      content.updateYear(editingYear.id, yearName.trim());
+      toast.success('Year updated');
+    } else {
+      content.addYear(yearName.trim());
+      toast.success('Year added');
+    }
+    setYearDialogOpen(false);
+  };
 
   // Unit handlers
-  const openAddUnit = () => {
+  const openAddUnit = (yearId?: string) => {
     setEditingUnit(null);
     setUnitName('');
+    setUnitYearId(yearId || content.years[0]?.id || '');
     setUnitDialogOpen(true);
   };
 
   const openEditUnit = (unit: Unit) => {
     setEditingUnit(unit);
     setUnitName(unit.name);
+    setUnitYearId(unit.yearId);
     setUnitDialogOpen(true);
   };
 
@@ -96,92 +112,89 @@ const Admin = () => {
       toast.error('Unit name is required');
       return;
     }
+    if (!unitYearId) {
+      toast.error('Please select a year');
+      return;
+    }
     if (editingUnit) {
-      content.updateUnit(editingUnit.id, unitName.trim());
+      content.updateUnit(editingUnit.id, { name: unitName.trim(), yearId: unitYearId });
       toast.success('Unit updated');
     } else {
-      content.addUnit(unitName.trim());
+      content.addUnit(unitName.trim(), unitYearId);
       toast.success('Unit added');
     }
     setUnitDialogOpen(false);
   };
 
-  const confirmDeleteUnit = () => {
-    if (deleteUnitId) {
-      content.deleteUnit(deleteUnitId);
-      toast.success('Unit deleted');
-      setDeleteUnitId(null);
-    }
+  // Content handlers
+  const openAddContent = (type: 'lesson' | 'practice' | 'project' | 'game', unitId?: string) => {
+    setContentType(type);
+    setEditingContent(null);
+    setContentDefaultUnitId(unitId);
+    setContentDialogOpen(true);
   };
 
-  // Lesson handlers
-  const openAddLesson = (unitName?: string) => {
-    setEditingLesson(null);
-    setLessonForm({
-      title: '',
-      description: '',
-      unit: unitName || content.units[0]?.name || '',
-      category: 'lesson',
-      difficulty: 'easy',
-      points: 10,
-      icon: '📚',
-      htmlContent: '',
-    });
-    setLessonDialogOpen(true);
+  const openEditContent = (item: ContentItem, type: 'lesson' | 'practice' | 'project' | 'game') => {
+    setContentType(type);
+    setEditingContent(item);
+    setContentDefaultUnitId(item.unitId);
+    setContentDialogOpen(true);
   };
 
-  const openEditLesson = (lesson: ManagedLesson) => {
-    setEditingLesson(lesson);
-    setLessonForm({
-      title: lesson.title,
-      description: lesson.description,
-      unit: lesson.unit,
-      category: lesson.category,
-      difficulty: lesson.difficulty,
-      points: lesson.points,
-      icon: lesson.icon,
-      htmlContent: lesson.htmlContent || '',
-    });
-    setLessonDialogOpen(true);
-  };
-
-  const saveLesson = () => {
-    if (!lessonForm.title.trim()) {
-      toast.error('Lesson title is required');
-      return;
-    }
-    if (!lessonForm.unit) {
-      toast.error('Please select a unit');
-      return;
-    }
-
-    const lessonData = {
-      title: lessonForm.title.trim(),
-      description: lessonForm.description.trim(),
-      unit: lessonForm.unit,
-      category: lessonForm.category,
-      difficulty: lessonForm.difficulty,
-      points: lessonForm.points,
-      icon: lessonForm.icon,
-      htmlContent: lessonForm.htmlContent,
-    };
-
-    if (editingLesson) {
-      content.updateLesson(editingLesson.id, lessonData);
-      toast.success('Lesson updated');
+  const saveContent = (item: Omit<ContentItem, 'id' | 'type' | 'order'>) => {
+    if (editingContent) {
+      switch (contentType) {
+        case 'lesson':
+          content.updateLesson(editingContent.id, item);
+          break;
+        case 'practice':
+          content.updatePractice(editingContent.id, item);
+          break;
+        case 'project':
+          content.updateProject(editingContent.id, item);
+          break;
+        case 'game':
+          content.updateGame(editingContent.id, item);
+          break;
+      }
+      toast.success(`${contentType} updated`);
     } else {
-      content.addLesson(lessonData);
-      toast.success('Lesson added');
+      switch (contentType) {
+        case 'lesson':
+          content.addLesson(item as Omit<ManagedLesson, 'id' | 'type' | 'order'>);
+          break;
+        case 'practice':
+          content.addPractice(item as Omit<Practice, 'id' | 'type' | 'order'>);
+          break;
+        case 'project':
+          content.addProject(item as Omit<Project, 'id' | 'type' | 'order'>);
+          break;
+        case 'game':
+          content.addGame(item as Omit<Game, 'id' | 'type' | 'order'>);
+          break;
+      }
+      toast.success(`${contentType} added`);
     }
-    setLessonDialogOpen(false);
   };
 
-  const confirmDeleteLesson = () => {
-    if (deleteLessonId) {
-      content.deleteLesson(deleteLessonId);
-      toast.success('Lesson deleted');
-      setDeleteLessonId(null);
+  const confirmDeleteContent = () => {
+    if (!deleteContentId) return;
+    switch (deleteContentId.type) {
+      case 'lesson':
+        content.deleteLesson(deleteContentId.id);
+        break;
+      case 'practice':
+        content.deletePractice(deleteContentId.id);
+        break;
+      case 'project':
+        content.deleteProject(deleteContentId.id);
+        break;
+      case 'game':
+        content.deleteGame(deleteContentId.id);
+        break;
     }
+    toast.success(`${deleteContentId.type} deleted`);
+    setDeleteContentId(null);
   };
 
   const handleReset = () => {
@@ -189,6 +202,11 @@ const Admin = () => {
     toast.success('Reset to default content');
     setResetDialogOpen(false);
   };
+
+  // Get units for selected year filter
+  const selectedYearUnits = content.selectedYearId 
+    ? content.getUnitsByYear(content.selectedYearId) 
+    : content.units;
 
   if (!content.isLoaded) {
     return (
@@ -211,158 +229,265 @@ const Admin = () => {
             </Link>
             <h1 className="text-xl font-bold">Content Manager</h1>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setResetDialogOpen(true)}
-            className="gap-2"
-          >
-            <RotateCcw className="h-4 w-4" />
-            Reset to Default
-          </Button>
+          <div className="flex items-center gap-2">
+            <ImportExportPanel
+              onExportJSON={content.exportToJSON}
+              onExportCSV={content.exportToCSV}
+              onImportJSON={content.importFromJSON}
+              onImportCSV={content.importFromCSV}
+            />
+            <Button
+              variant="outline"
+              onClick={() => setResetDialogOpen(true)}
+              className="gap-2"
+            >
+              <RotateCcw className="h-4 w-4" />
+              Reset
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        {/* Year Filter */}
+        <div className="mb-6 flex items-center gap-4">
+          <Label>Filter by Year:</Label>
+          <Select
+            value={content.selectedYearId || 'all'}
+            onValueChange={(value) => content.setSelectedYearId(value === 'all' ? null : value)}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All Years" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {content.years.map((year) => (
+                <SelectItem key={year.id} value={year.id}>
+                  {year.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="units">Units ({content.units.length})</TabsTrigger>
-            <TabsTrigger value="lessons">Lessons ({content.lessons.length})</TabsTrigger>
+          <TabsList className="mb-6 flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="years" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              Years ({content.years.length})
+            </TabsTrigger>
+            <TabsTrigger value="units" className="gap-2">
+              <FolderKanban className="h-4 w-4" />
+              Units ({selectedYearUnits.length})
+            </TabsTrigger>
+            <TabsTrigger value="lessons" className="gap-2">
+              <BookOpen className="h-4 w-4" />
+              Lessons ({content.lessons.length})
+            </TabsTrigger>
+            <TabsTrigger value="practices" className="gap-2">
+              <Dumbbell className="h-4 w-4" />
+              Practice ({content.practices.length})
+            </TabsTrigger>
+            <TabsTrigger value="projects" className="gap-2">
+              <FolderKanban className="h-4 w-4" />
+              Projects ({content.projects.length})
+            </TabsTrigger>
+            <TabsTrigger value="games" className="gap-2">
+              <Gamepad2 className="h-4 w-4" />
+              Games ({content.games.length})
+            </TabsTrigger>
           </TabsList>
+
+          {/* Years Tab */}
+          <TabsContent value="years" className="space-y-4">
+            <div className="flex justify-end">
+              <Button onClick={openAddYear} className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Year
+              </Button>
+            </div>
+            <DraggableList
+              items={content.years}
+              onReorder={content.reorderYears}
+              onEdit={openEditYear}
+              onDelete={(id) => setDeleteYearId(id)}
+              renderItem={(year) => (
+                <div>
+                  <h3 className="font-semibold">{year.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {content.getUnitsByYear(year.id).length} units
+                  </p>
+                </div>
+              )}
+            />
+          </TabsContent>
 
           {/* Units Tab */}
           <TabsContent value="units" className="space-y-4">
             <div className="flex justify-end">
-              <Button onClick={openAddUnit} className="gap-2">
+              <Button onClick={() => openAddUnit(content.selectedYearId || undefined)} className="gap-2">
                 <Plus className="h-4 w-4" />
                 Add Unit
               </Button>
             </div>
-
-            <div className="grid gap-4">
-              {content.units.map((unit) => {
-                const lessonCount = content.getLessonsByUnit(unit.name).length;
+            <DraggableList
+              items={selectedYearUnits}
+              onReorder={content.reorderUnits}
+              onEdit={openEditUnit}
+              onDelete={(id) => setDeleteUnitId(id)}
+              renderItem={(unit) => {
+                const year = content.years.find((y) => y.id === unit.yearId);
+                const unitContent = content.getContentByUnit(unit.id);
+                const totalItems = unitContent.lessons.length + unitContent.practices.length + 
+                                   unitContent.projects.length + unitContent.games.length;
                 return (
-                  <Card key={unit.id}>
-                    <CardContent className="flex items-center justify-between p-4">
-                      <div className="flex items-center gap-3">
-                        <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                        <div>
-                          <h3 className="font-semibold">{unit.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {lessonCount} lesson{lessonCount !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setActiveTab('lessons');
-                            // Could add unit filter here
+                  <div>
+                    <h3 className="font-semibold">{unit.name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {year?.name} • {totalItems} items
+                    </p>
+                  </div>
+                );
+              }}
+            />
+          </TabsContent>
+
+          {/* Content Tabs */}
+          {(['lessons', 'practices', 'projects', 'games'] as const).map((tabType) => {
+            const typeMap = {
+              lessons: { items: content.lessons, type: 'lesson' as const, icon: '📚' },
+              practices: { items: content.practices, type: 'practice' as const, icon: '💪' },
+              projects: { items: content.projects, type: 'project' as const, icon: '🎨' },
+              games: { items: content.games, type: 'game' as const, icon: '🎮' },
+            };
+            const { items, type, icon } = typeMap[tabType];
+            
+            // Filter by selected year
+            const filteredItems = content.selectedYearId
+              ? items.filter((item) => {
+                  const unit = content.units.find((u) => u.id === item.unitId);
+                  return unit?.yearId === content.selectedYearId;
+                })
+              : items;
+
+            // Group by unit
+            const groupedByUnit = selectedYearUnits.map((unit) => ({
+              unit,
+              items: filteredItems.filter((item) => item.unitId === unit.id),
+            })).filter((group) => group.items.length > 0);
+
+            return (
+              <TabsContent key={tabType} value={tabType} className="space-y-6">
+                <div className="flex justify-end">
+                  <Button onClick={() => openAddContent(type)} className="gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Button>
+                </div>
+
+                {groupedByUnit.length > 0 ? (
+                  groupedByUnit.map(({ unit, items: unitItems }) => (
+                    <Card key={unit.id}>
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center justify-between">
+                          <span>{unit.name}</span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openAddContent(type, unit.id)}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <DraggableList
+                          items={unitItems}
+                          onReorder={(reordered) => {
+                            switch (type) {
+                              case 'lesson':
+                                content.reorderLessons(reordered as ManagedLesson[]);
+                                break;
+                              case 'practice':
+                                content.reorderPractices(reordered as Practice[]);
+                                break;
+                              case 'project':
+                                content.reorderProjects(reordered as Project[]);
+                                break;
+                              case 'game':
+                                content.reorderGames(reordered as Game[]);
+                                break;
+                            }
                           }}
-                        >
-                          View Lessons
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => openEditUnit(unit)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setDeleteUnitId(unit.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
+                          onEdit={(item) => openEditContent(item, type)}
+                          onDelete={(id) => setDeleteContentId({ id, type })}
+                          renderItem={(item) => (
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">{item.icon}</span>
+                              <div>
+                                <h4 className="font-medium">{item.title}</h4>
+                                <div className="flex gap-2 text-xs text-muted-foreground">
+                                  <span className="capitalize">{item.difficulty}</span>
+                                  <span>•</span>
+                                  <span>{item.points} pts</span>
+                                  {item.htmlContent && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-primary">Has HTML</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        />
+                      </CardContent>
+                    </Card>
+                  ))
+                ) : (
+                  <Card>
+                    <CardContent className="py-12 text-center">
+                      <div className="text-4xl mb-4">{icon}</div>
+                      <h3 className="font-semibold text-lg">No {tabType} yet</h3>
+                      <p className="text-muted-foreground">
+                        Click the button above to add your first {type}.
+                      </p>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
-          </TabsContent>
-
-          {/* Lessons Tab */}
-          <TabsContent value="lessons" className="space-y-6">
-            <div className="flex justify-end">
-              <Button onClick={() => openAddLesson()} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add Lesson
-              </Button>
-            </div>
-
-            {content.units.map((unit) => {
-              const unitLessons = content.getLessonsByUnit(unit.name);
-              if (unitLessons.length === 0) return null;
-
-              return (
-                <Card key={unit.id}>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">{unit.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {unitLessons.map((lesson) => (
-                      <div
-                        key={lesson.id}
-                        className="flex items-center justify-between rounded-lg border p-3 bg-muted/30"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{lesson.icon}</span>
-                          <div>
-                            <h4 className="font-medium">{lesson.title}</h4>
-                            <div className="flex gap-2 text-xs text-muted-foreground">
-                              <span className="capitalize">{lesson.category}</span>
-                              <span>•</span>
-                              <span className="capitalize">{lesson.difficulty}</span>
-                              <span>•</span>
-                              <span>{lesson.points} pts</span>
-                              {lesson.htmlContent && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-primary">Has HTML</span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1">
-                          {lesson.htmlContent && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setPreviewHtml(lesson.htmlContent || null)}
-                            >
-                              Preview
-                            </Button>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => openEditLesson(lesson)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setDeleteLessonId(lesson.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </TabsContent>
+                )}
+              </TabsContent>
+            );
+          })}
         </Tabs>
       </main>
+
+      {/* Year Dialog */}
+      <Dialog open={yearDialogOpen} onOpenChange={setYearDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingYear ? 'Edit Year' : 'Add Year'}</DialogTitle>
+            <DialogDescription>
+              {editingYear ? 'Update the year name.' : 'Enter a name for the new year/grade level.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Year Name</Label>
+              <Input
+                value={yearName}
+                onChange={(e) => setYearName(e.target.value)}
+                placeholder="e.g., Grade 5"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setYearDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveYear}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Unit Dialog */}
       <Dialog open={unitDialogOpen} onOpenChange={setUnitDialogOpen}>
@@ -370,18 +495,32 @@ const Admin = () => {
           <DialogHeader>
             <DialogTitle>{editingUnit ? 'Edit Unit' : 'Add Unit'}</DialogTitle>
             <DialogDescription>
-              {editingUnit ? 'Update the unit name.' : 'Enter a name for the new unit.'}
+              {editingUnit ? 'Update the unit.' : 'Create a new unit within a year.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="unit-name">Unit Name</Label>
+              <Label>Unit Name</Label>
               <Input
-                id="unit-name"
                 value={unitName}
                 onChange={(e) => setUnitName(e.target.value)}
                 placeholder="e.g., Unit 7: Decimals"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Year</Label>
+              <Select value={unitYearId} onValueChange={setUnitYearId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {content.years.map((year) => (
+                    <SelectItem key={year.id} value={year.id}>
+                      {year.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
@@ -393,173 +532,43 @@ const Admin = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Lesson Dialog */}
-      <Dialog open={lessonDialogOpen} onOpenChange={setLessonDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingLesson ? 'Edit Lesson' : 'Add Lesson'}</DialogTitle>
-            <DialogDescription>
-              Fill in the lesson details and optionally add HTML content.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="lesson-title">Title</Label>
-                <Input
-                  id="lesson-title"
-                  value={lessonForm.title}
-                  onChange={(e) =>
-                    setLessonForm((prev) => ({ ...prev, title: e.target.value }))
-                  }
-                  placeholder="Lesson title"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lesson-icon">Icon (emoji)</Label>
-                <Input
-                  id="lesson-icon"
-                  value={lessonForm.icon}
-                  onChange={(e) =>
-                    setLessonForm((prev) => ({ ...prev, icon: e.target.value }))
-                  }
-                  placeholder="📚"
-                />
-              </div>
-            </div>
+      {/* Content Item Form */}
+      <ContentItemForm
+        open={contentDialogOpen}
+        onOpenChange={setContentDialogOpen}
+        onSave={saveContent}
+        editingItem={editingContent}
+        units={content.units}
+        defaultUnitId={contentDefaultUnitId}
+        contentType={contentType.charAt(0).toUpperCase() + contentType.slice(1)}
+      />
 
-            <div className="space-y-2">
-              <Label htmlFor="lesson-description">Description</Label>
-              <Textarea
-                id="lesson-description"
-                value={lessonForm.description}
-                onChange={(e) =>
-                  setLessonForm((prev) => ({ ...prev, description: e.target.value }))
+      {/* Delete Year Confirmation */}
+      <AlertDialog open={!!deleteYearId} onOpenChange={() => setDeleteYearId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Year?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the year, all its units, and all content. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteYearId) {
+                  content.deleteYear(deleteYearId);
+                  toast.success('Year deleted');
+                  setDeleteYearId(null);
                 }
-                placeholder="Brief description of the lesson"
-                rows={2}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Unit</Label>
-                <Select
-                  value={lessonForm.unit}
-                  onValueChange={(value) =>
-                    setLessonForm((prev) => ({ ...prev, unit: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {content.units.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.name}>
-                        {unit.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Category</Label>
-                <Select
-                  value={lessonForm.category}
-                  onValueChange={(value: typeof lessonForm.category) =>
-                    setLessonForm((prev) => ({ ...prev, category: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat} className="capitalize">
-                        {cat}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Difficulty</Label>
-                <Select
-                  value={lessonForm.difficulty}
-                  onValueChange={(value: typeof lessonForm.difficulty) =>
-                    setLessonForm((prev) => ({ ...prev, difficulty: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {difficulties.map((diff) => (
-                      <SelectItem key={diff} value={diff} className="capitalize">
-                        {diff}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="lesson-points">Points</Label>
-                <Input
-                  id="lesson-points"
-                  type="number"
-                  min={0}
-                  value={lessonForm.points}
-                  onChange={(e) =>
-                    setLessonForm((prev) => ({
-                      ...prev,
-                      points: parseInt(e.target.value) || 0,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="lesson-html">HTML Content (optional)</Label>
-              <Textarea
-                id="lesson-html"
-                value={lessonForm.htmlContent}
-                onChange={(e) =>
-                  setLessonForm((prev) => ({ ...prev, htmlContent: e.target.value }))
-                }
-                placeholder="<div>Your interactive lesson content here...</div>"
-                rows={8}
-                className="font-mono text-sm"
-              />
-              <p className="text-xs text-muted-foreground">
-                Add custom HTML including forms, embedded content, and interactive elements.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setLessonDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={saveLesson}>Save Lesson</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* HTML Preview Dialog */}
-      <Dialog open={!!previewHtml} onOpenChange={() => setPreviewHtml(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>HTML Content Preview</DialogTitle>
-          </DialogHeader>
-          <div
-            className="prose prose-sm max-w-none rounded-lg border p-4 bg-background"
-            dangerouslySetInnerHTML={{ __html: previewHtml || '' }}
-          />
-        </DialogContent>
-      </Dialog>
+              }}
+              className="bg-destructive text-destructive-foreground"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete Unit Confirmation */}
       <AlertDialog open={!!deleteUnitId} onOpenChange={() => setDeleteUnitId(null)}>
@@ -567,30 +576,42 @@ const Admin = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Unit?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the unit and all its lessons. This action cannot be undone.
+              This will permanently delete the unit and all its content. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteUnit} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteUnitId) {
+                  content.deleteUnit(deleteUnitId);
+                  toast.success('Unit deleted');
+                  setDeleteUnitId(null);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Delete Lesson Confirmation */}
-      <AlertDialog open={!!deleteLessonId} onOpenChange={() => setDeleteLessonId(null)}>
+      {/* Delete Content Confirmation */}
+      <AlertDialog open={!!deleteContentId} onOpenChange={() => setDeleteContentId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Lesson?</AlertDialogTitle>
+            <AlertDialogTitle>Delete {deleteContentId?.type}?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the lesson. This action cannot be undone.
+              This will permanently delete this item. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeleteLesson} className="bg-destructive text-destructive-foreground">
+            <AlertDialogAction
+              onClick={confirmDeleteContent}
+              className="bg-destructive text-destructive-foreground"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -603,14 +624,12 @@ const Admin = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Reset to Default Content?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will restore all units and lessons to their original state. All your custom changes will be lost.
+              This will restore all content to the original state. All your custom changes will be lost.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset}>
-              Reset
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleReset}>Reset</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
